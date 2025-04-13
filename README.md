@@ -3,7 +3,6 @@
 <p align="center">
   <!-- PLACEHOLDER: Replace with a screenshot or GIF of your web interface! -->
   <!-- Create a 'docs' folder, add image/gif, update path below -->
-  <img src="./docs/quoridor_demo.png" alt="Quoridor Bot Gameplay" width="700"/>
 </p>
 
 Play the strategic board game Quoridor against an algorithmic AI opponent through a web interface powered by Flask. This project implements the core Quoridor game logic and pits a human player against a bot capable of searching for optimal moves.
