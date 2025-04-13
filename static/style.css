@@ -1,0 +1,379 @@
+/* static/style.css (Web GUI V4 - Error Feedback Styles - Readable Format) */
+
+/* --- Fonts & Base --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap');
+
+:root {
+    /* Enhanced Dark Palette */
+    --bg-color-dark: #121418;
+    --bg-color-medium: #1c1f26;
+    --bg-color-light: #2a2e37;
+    --bg-glass: rgba(42, 46, 55, 0.65);
+    --border-color-strong: rgba(255, 255, 255, 0.15);
+    --border-color-subtle: rgba(255, 255, 255, 0.08);
+    --shadow-light: rgba(255, 255, 255, 0.03);
+    --shadow-dark: rgba(0, 0, 0, 0.5);
+    --text-primary: #dde1e6;
+    --text-secondary: #848d97;
+    --accent-primary: #4493f8;
+    --accent-secondary: #216eeb;
+    --error-color: #f47067;
+    --success-color: #57ab5a;
+    --gold-color: #e3b341;
+
+    /* Board Colors */
+    --board-bg: #383838;
+    --grid-color: #4a4f58;
+    --goal-color: rgba(74, 93, 74, 0.4);
+    --p1-color: #f0f0f0; --p1-highlight: #ffffff;
+    --p2-color: #7d8590; --p2-highlight: #acb6c2;
+    --wall-color: #e3b341;
+    --wall-inline-shadow: rgba(0,0,0,0.2);
+    --valid-move-fill: rgba(68, 147, 248, 0.15);
+    --valid-move-stroke: var(--accent-primary);
+    --selected-stroke: var(--gold-color);
+
+    /* Sizes & Spacing */
+    --base-font-size: 16px;
+    --padding-sm: 10px;
+    --padding-md: 15px;
+    --padding-lg: 25px;
+    --border-radius-md: 10px;
+    --border-radius-lg: 16px;
+
+    /* Board Specific - Base values, JS might override with calculations */
+    --cell-size: 55px;
+    --wall-thickness: 11px;
+    --pawn-radius-factor: 3.1;
+    --board-padding: calc(var(--cell-size) / 2);
+}
+
+/* --- Base & Layout --- */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, var(--bg-color-dark) 0%, #23262e 100%);
+    color: var(--text-primary);
+    font-size: var(--base-font-size);
+    line-height: 1.6;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Align content to the top */
+    min-height: 100vh;
+    padding: var(--padding-lg);
+    overflow-x: hidden;
+}
+
+.game-container {
+    width: 100%;
+    max-width: 1300px; /* Wider overall layout */
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-lg);
+}
+
+.game-header {
+    text-align: center;
+    padding-bottom: var(--padding-md);
+    margin-bottom: 0; /* Remove extra margin */
+}
+
+.game-header h1 {
+    font-size: 2.2em;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+}
+
+.player-labels {
+    font-size: 1.0em;
+    color: var(--text-secondary);
+}
+
+.player-labels span {
+    margin: 0 8px;
+    font-weight: 500;
+}
+
+.game-main {
+    display: grid;
+    /* Flexible board (min size), fixed info panel */
+    grid-template-columns: minmax(400px, 2fr) minmax(300px, 380px);
+    gap: var(--padding-lg);
+    width: 100%;
+}
+
+/* Responsive layout for smaller screens */
+@media (max-width: 1000px) {
+    .game-main {
+        grid-template-columns: 1fr; /* Stack columns */
+    }
+    .game-board-area {
+        order: 2; /* Show board below info */
+    }
+    .game-info-panel {
+        order: 1; /* Show info panel above */
+        max-width: 700px; /* Limit info panel width when stacked */
+        margin: 0 auto; /* Center info panel */
+        width: 100%;
+    }
+}
+
+
+/* --- Board Area --- */
+.game-board-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.board-container {
+    width: 100%;
+    max-width: 700px; /* Max board size */
+    aspect-ratio: 1 / 1; /* Maintain square shape */
+    background-color: var(--bg-color-medium);
+    border-radius: var(--border-radius-lg);
+    padding: var(--padding-md);
+    box-shadow: 0 6px 20px var(--shadow-dark);
+}
+
+#quoridor-board {
+    display: block; /* Remove potential extra space below SVG */
+    width: 100%;
+    height: 100%;
+    background-color: var(--board-bg);
+    border-radius: var(--border-radius-md); /* Inner rounding */
+    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.5); /* Inner shadow */
+    transition: box-shadow 0.3s ease-in-out, outline 0.1s ease-in-out; /* Add transition for flash */
+}
+
+/* --- Info Panel --- */
+.game-info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-md);
+}
+
+.info-card {
+    background: var(--bg-glass);
+    /* Frosted glass effect */
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid var(--border-color-subtle);
+    border-radius: var(--border-radius-lg);
+    padding: var(--padding-md);
+    box-shadow: 0 4px 15px var(--shadow-dark);
+}
+
+.info-card h2 {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color-subtle);
+    color: var(--accent-primary);
+}
+
+.status-card p {
+    margin-bottom: 6px;
+    font-size: 0.95em;
+}
+
+#status-message {
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+/* Error Message Styling */
+#error-message {
+    color: var(--error-color);
+    font-weight: 500;
+    font-size: 0.95em;
+    min-height: 1.1em; /* Reserve space even when empty */
+    display: block; /* Ensure it takes space */
+    margin-top: 5px;
+    text-align: right; /* Align error to the right */
+}
+.error-text:empty {
+    display: none; /* Hide completely when empty */
+}
+
+
+.player-stats .player-resource {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 0.95em;
+}
+.player-stats span:first-child {
+    color: var(--text-secondary);
+}
+.player-stats span:last-child {
+    font-weight: 600;
+}
+
+.controls-card {
+    text-align: center;
+}
+
+/* Buttons */
+.button-primary,
+.button-confirm,
+.button-cancel {
+    border: none;
+    padding: 10px 22px;
+    border-radius: 25px;
+    font-size: 0.95em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 90px;
+    margin: 5px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.button-primary {
+    background-color: var(--accent-primary);
+    color: #fff; /* White text on blue */
+    box-shadow: 0 2px 8px rgba(88, 166, 255, 0.3);
+}
+.button-primary:hover:not(:disabled) {
+    background-color: var(--accent-secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(88, 166, 255, 0.4);
+}
+.button-primary:disabled {
+    background: linear-gradient(145deg, #4a4a4a, #5a5a5a); /* Gradient for disabled */
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.button-confirm {
+    background-color: var(--success-color);
+    color: white;
+    box-shadow: 0 2px 8px rgba(63, 185, 80, 0.3);
+}
+.button-confirm:hover:not(:disabled) {
+    background-color: #2da44e; /* Darker green */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(63, 185, 80, 0.4);
+}
+
+.button-cancel {
+    background-color: var(--button-cancel-bg);
+    color: var(--text-primary);
+    box-shadow: 0 2px 5px rgba(108, 117, 125, 0.2);
+}
+.button-cancel:hover {
+    background-color: var(--button-cancel-hover-bg);
+}
+
+/* Move Input / Confirmation Area */
+.move-input {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+.move-input.inactive {
+    display: none; /* Hide when not selecting */
+}
+#selected-move-label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+#selected-move-value {
+    font-weight: 600;
+    font-size: 1.05em;
+    color: var(--accent-primary); /* Make selected move stand out */
+    background-color: rgba(88, 166, 255, 0.1); /* Subtle background */
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+.confirm-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+}
+
+
+/* --- SVG Element Styling --- */
+.grid-line {
+    stroke: var(--grid-color);
+    stroke-width: 1; /* Make grid thinner */
+}
+.goal-cell {
+     fill: var(--goal-color);
+     opacity: 0.6;
+}
+
+/* Pawns */
+.pawn {
+    stroke-width: 2;
+    transition: cx 0.3s cubic-bezier(0.25, 1, 0.5, 1), cy 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    filter: drop-shadow(2px 3px 4px rgba(0, 0, 0, 0.6));
+}
+.pawn-p1 { fill: url(#p1Gradient); stroke: rgba(255,255,255,0.4); }
+.pawn-p2 { fill: url(#p2Gradient); stroke: rgba(0,0,0,0.4); }
+.pawn-active {
+    stroke-width: 3.5;
+    stroke: var(--active-color);
+    filter: drop-shadow(0px 0px 7px var(--active-color)) drop-shadow(2px 3px 4px rgba(0, 0, 0, 0.6));
+}
+
+/* Walls */
+.wall {
+    stroke: var(--wall-color);
+    stroke-linecap: round;
+    stroke-width: calc(var(--wall-thickness)); /* Use full thickness */
+    filter: drop-shadow(1px 1px 3px var(--wall-shadow));
+}
+
+/* Interaction & Highlighting */
+.clickable {
+    cursor: pointer;
+    fill: transparent; /* Make interaction shapes invisible */
+}
+.valid-move-highlight {
+    fill: var(--valid-move-fill);
+    stroke: var(--active-color);
+    stroke-width: 1.5;
+    stroke-dasharray: 3 3;
+    pointer-events: none; /* Don't block clicks */
+    opacity: 0; /* Start hidden */
+    animation: fadeInHighlight 0.3s ease forwards;
+    rx: 3; /* Apply rounding to rects */
+    ry: 3;
+}
+@keyframes fadeInHighlight { from { opacity: 0; } to { opacity: 0.7; } }
+
+.selected-outline {
+    fill: none;
+    stroke: var(--gold-color);
+    stroke-width: 3;
+    stroke-linecap: round;
+    pointer-events: none;
+    filter: drop-shadow(0px 0px 6px var(--gold-color));
+    opacity: 0.9;
+}
+
+/* Board Error Flash */
+#quoridor-board.board-error-flash {
+    /* Use outline for flash effect */
+    outline: 4px solid var(--error-color);
+    outline-offset: -2px; /* Bring outline slightly inside border-radius */
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.4), 0 0 15px var(--error-color); /* Keep inner + add outer glow */
+    transition: outline 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+}

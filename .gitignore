@@ -1,0 +1,29 @@
+# Virtual Environment
+venv/
+.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/
+*.spec
+
+# User-specific output/logs
+fact_check_results.txt
+
+# IDE / OS files
+.idea/
+.vscode/
+*.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.*
+!.env.example
