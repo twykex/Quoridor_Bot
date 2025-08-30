@@ -9,29 +9,27 @@ log.setLevel(logging.ERROR)
 # --- Import ONLY Game Logic and Bot Logic ---
 try:
     from quoridor_logic import QuoridorGame, BOARD_SIZE
-    from quoridor_bot import QuoridorBot # Import the algorithmic bot
+    from quoridor_bot import QuoridorBot
+    from llm_bot import LLMBot
 except ImportError as e:
     print(f"!!ImportErr: {e}")
     sys.exit(1)
 
 # --- Flask App Setup ---
 app = Flask(__name__)
-# log = logging.getLogger('werkzeug')
-# log.setLevel(logging.ERROR)
 
-# --- Game and Bot Initialization ---
+# --- Game State and Bot Management ---
 # Global state for the single game instance.
-# In a real-world multi-game server, this would be managed in a session object.
+# In a real-world multi-game server, this would be managed in sessions.
 game = QuoridorGame()
 turn_count = 1
 game_active = False
-HUMAN_PLAYER_ID = 2
-BOT_PLAYER_ID = 1 # Bot is Player 1
+active_bot = None # This will hold the bot instance for the current game.
 
-# Create the bot instance with desired search depth
-# Depth 2 is faster for testing, Depth 3/4 is stronger but slower
-BOT_SEARCH_DEPTH = 3
-bot = QuoridorBot(player_id=BOT_PLAYER_ID, search_depth=BOT_SEARCH_DEPTH)
+# Constants
+HUMAN_PLAYER_ID = 2
+BOT_PLAYER_ID = 1
+ALGO_BOT_SEARCH_DEPTH = 3
 
 
 # --- Compact Console Logging Helper ---
@@ -59,7 +57,11 @@ def format_game_state_for_log(game_state, turn_num):
 # --- Helper to Run Bot Turn ---
 def run_bot_turn():
     """Finds and makes the Bot's move. Modifies the global 'game' object."""
-    global game # The global game state is modified by this function
+    global game, active_bot
+
+    if not active_bot:
+        print("Error: run_bot_turn called but no active_bot is set.")
+        return "Error: Bot not initialized."
 
     if game.get_current_player() != BOT_PLAYER_ID:
         print(f"Error: run_bot_turn called when it is P{game.get_current_player()}'s turn.")
@@ -67,7 +69,7 @@ def run_bot_turn():
 
     print(f"{format_game_state_for_log(game.get_state_dict(), turn_count)} - Bot Turn Start")
 
-    best_move = bot.find_best_move(game) # Bot's internal logging happens here
+    best_move = active_bot.find_best_move(game) # Use the active bot instance
 
     status_message = f"P{BOT_PLAYER_ID}(Bot) Thinking..."
 
@@ -100,11 +102,23 @@ def index():
 
 @app.route('/start_game', methods=['POST'])
 def start_game():
-    global game, turn_count, game_active
-    print("\n[LOG] ### GAME START ###")
+    global game, turn_count, game_active, active_bot
+
+    data = request.get_json()
+    bot_type = data.get('bot_type', 'algo') # Default to 'algo' bot
+
+    print(f"\n[LOG] ### GAME START ### (Opponent: {bot_type.upper()})")
+
+    # Initialize game state
     game = QuoridorGame()
     turn_count = 1
     game_active = True
+
+    # Create the selected bot instance
+    if bot_type == 'llm':
+        active_bot = LLMBot(player_id=BOT_PLAYER_ID)
+    else: # Default to the algorithmic bot
+        active_bot = QuoridorBot(player_id=BOT_PLAYER_ID, search_depth=ALGO_BOT_SEARCH_DEPTH)
 
     initial_state = game.get_state_dict()
     print(f"{format_game_state_for_log(initial_state, turn_count)} - Initial State")
@@ -113,7 +127,7 @@ def start_game():
     # If Bot is Player 1, it takes the first turn
     if initial_state.get('current_player') == BOT_PLAYER_ID:
         print("[LOG] Bot is Player 1, running initial turn...")
-        status_msg = run_bot_turn() # This updates the global 'game' object
+        status_msg = run_bot_turn()
         final_state_after_bot = game.get_state_dict()
     else:
         final_state_after_bot = initial_state

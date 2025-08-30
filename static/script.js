@@ -23,6 +23,7 @@ const p2WallsInfo = document.getElementById('p2-walls-info');
 const statusMessageSpan = document.getElementById('status-message'); // Renamed from statusInfo for clarity
 const errorMessageSpan = document.getElementById('error-message'); // Get error span
 const startButton = document.getElementById('start-button');
+const botSelector = document.getElementById('bot-selector');
 const moveInputArea = document.getElementById('move-input-area');
 const selectedMoveLabel = document.getElementById('selected-move-label'); // Get label too
 const selectedMoveValue = document.getElementById('selected-move-value'); // Renamed from selectedMoveSpan
@@ -630,11 +631,61 @@ document.addEventListener('DOMContentLoaded', initialize);
 
 // --- Start Game Function ---
 async function handleStartGame() {
-    console.log("Start clicked"); startButton.disabled = true; startButton.textContent = "Starting..."; statusMessageSpan.textContent = "Initializing..."; errorMessageSpan.textContent = ''; isGameOver = false; gameActive = false; stopPolling();
-    try { const response = await fetch('/start_game', { method: 'POST' }); if (!response.ok) throw new Error(`HTTP error! ${response.status}`); const data = await response.json();
-        if (data.success) { console.log("Game started."); gameActive = true; startButton.textContent = "Game Running..."; currentGameState = data.game_state || {}; updateInfoBar(currentGameState); drawPawns(currentGameState.p1_pos, currentGameState.p2_pos, currentGameState.current_player); drawWalls(currentGameState.placed_walls); isGameOver = currentGameState.is_game_over; if (currentGameState.current_player === HUMAN_PLAYER_ID && gameActive && !isGameOver) { enableHumanTurn(currentGameState); } else if (gameActive && !isGameOver) { statusMessageSpan.textContent = currentGameState.status_message || "Bot Thinking..."; disableInteraction(); } startPolling(); } // Changed LLM to Bot
-        else { throw new Error(data.message || "Fail start."); }
-    } catch (error) { console.error("Start error:", error); statusMessageSpan.textContent = "Start Error!"; errorMessageSpan.textContent = "Failed to start."; startButton.disabled = false; startButton.textContent = "Start Game"; gameActive = false; stopPolling(); }
+    console.log("Start clicked");
+    startButton.disabled = true;
+    botSelector.disabled = true; // Disable selector during game
+    startButton.textContent = "Starting...";
+    statusMessageSpan.textContent = "Initializing...";
+    errorMessageSpan.textContent = '';
+    isGameOver = false;
+    gameActive = false;
+    stopPolling();
+
+    const selectedBot = botSelector.value;
+    console.log(`Starting game against: ${selectedBot} bot`);
+
+    try {
+        const response = await fetch('/start_game', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ bot_type: selectedBot })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! ${response.status}`);
+        const data = await response.json();
+
+        if (data.success) {
+            console.log("Game started successfully.");
+            gameActive = true;
+            startButton.textContent = "Game Running...";
+            currentGameState = data.game_state || {};
+            updateInfoBar(currentGameState);
+            drawPawns(currentGameState.p1_pos, currentGameState.p2_pos, currentGameState.current_player);
+            drawWalls(currentGameState.placed_walls);
+            isGameOver = currentGameState.is_game_over;
+
+            if (currentGameState.current_player === HUMAN_PLAYER_ID && gameActive && !isGameOver) {
+                enableHumanTurn(currentGameState);
+            } else if (gameActive && !isGameOver) {
+                statusMessageSpan.textContent = currentGameState.status_message || "Bot Thinking...";
+                disableInteraction();
+            }
+            startPolling();
+        } else {
+            throw new Error(data.message || "Failed to start game.");
+        }
+    } catch (error) {
+        console.error("Start game error:", error);
+        statusMessageSpan.textContent = "Start Error!";
+        errorMessageSpan.textContent = "Failed to start the game.";
+        startButton.disabled = false;
+        botSelector.disabled = false; // Re-enable selector on failure
+        startButton.textContent = "Start Game";
+        gameActive = false;
+        stopPolling();
+    }
 }
 
 // Optional: Add simple flash function for feedback on invalid clicks

@@ -81,6 +81,16 @@
                 <!-- Card for game controls -->
                 <div class="info-card controls-card">
                     <h2>Controls</h2>
+
+                    <!-- Bot Selection Dropdown -->
+                    <div class="control-group">
+                        <label for="bot-selector">Opponent:</label>
+                        <select id="bot-selector" class="bot-select">
+                            <option value="algo" selected>Algorithmic Bot</option>
+                            <option value="llm">LLM Bot</option>
+                        </select>
+                    </div>
+
                     <!-- Start/Restart Button -->
                     <button id="start-button" class="button-primary">Start Game</button>
 

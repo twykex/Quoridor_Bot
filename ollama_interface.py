@@ -5,9 +5,11 @@ import json
 import re
 import sys
 import math
+import os
 
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "gemma3:27b" # Using the 27b model
+# Use environment variables for configuration with sensible defaults
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "gemma:2b") # Default to a smaller model
 
 # --- Prompt Engineering (REFINED - Strategy, Own Path, Endgame Focus) ---
 # Add parameters for valid move lists and failure reason
@@ -114,13 +116,13 @@ Provide your valid next move:
     return prompt
 
 # --- Ollama API Interaction & Validation (Unchanged) ---
-def get_llm_move(prompt):
-    payload = { "model": MODEL_NAME, "prompt": prompt, "stream": False, "options": { "temperature": 1.0, "top_k": 64, "top_p": 0.95, "min_p": 0.0, } }
+def get_llm_move(prompt, model_name=MODEL_NAME):
+    payload = { "model": model_name, "prompt": prompt, "stream": False, "options": { "temperature": 1.0, "top_k": 64, "top_p": 0.95, "min_p": 0.0, } }
     headers = {'Content-Type': 'application/json'}; timeout_seconds = 120
     try:
         response = requests.post(OLLAMA_API_URL, headers=headers, json=payload, timeout=timeout_seconds)
         response.raise_for_status(); response_data = response.json(); raw_response = response_data.get("response", "").strip()
-        print(f"\n>LLM Raw Response ({MODEL_NAME}):"); print(raw_response); print("---------------------------------------")
+        print(f"\n>LLM Raw Response ({model_name}):"); print(raw_response); print("---------------------------------------")
         if not raw_response: print("Warning: LLM empty response."); return None
         return raw_response
     except Exception as e: print(f"\nError during Ollama API call: {e}"); return None
