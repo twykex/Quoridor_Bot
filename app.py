@@ -20,11 +20,14 @@ app = Flask(__name__)
 # log.setLevel(logging.ERROR)
 
 # --- Game and Bot Initialization ---
+# Global state for the single game instance.
+# In a real-world multi-game server, this would be managed in a session object.
 game = QuoridorGame()
 turn_count = 1
 game_active = False
 HUMAN_PLAYER_ID = 2
 BOT_PLAYER_ID = 1 # Bot is Player 1
+
 # Create the bot instance with desired search depth
 # Depth 2 is faster for testing, Depth 3/4 is stronger but slower
 BOT_SEARCH_DEPTH = 3
@@ -32,54 +35,62 @@ bot = QuoridorBot(player_id=BOT_PLAYER_ID, search_depth=BOT_SEARCH_DEPTH)
 
 
 # --- Compact Console Logging Helper ---
-def fss(game_state, turn_num): # format_state_short abbreviated
-    p1p=game_state.get("p1_pos", "?"); p2p=game_state.get("p2_pos", "?")
-    p1w=game_state.get("p1_walls", "?"); p2w=game_state.get("p2_walls", "?")
-    cp=game_state.get("current_player", "?")
-    walls_short=[f"W{p[1]}{p[2]}" for w in game_state.get("placed_walls", []) if len(p := w.split()) == 3]
-    walls_str=",".join(sorted(walls_short)) if walls_short else "[]"
-    # P1=Bot, P2=Human
-    return f"[G1/T{turn_num}] P{cp} S(B:{p1p}({p1w}) H:{p2p}({p2w})|W:{walls_str})" # B=Bot, H=Human
+def format_game_state_for_log(game_state, turn_num):
+    """Creates a compact, readable string of the current game state for logging."""
+    p1_pos = game_state.get("p1_pos", "?")
+    p2_pos = game_state.get("p2_pos", "?")
+    p1_walls = game_state.get("p1_walls", "?")
+    p2_walls = game_state.get("p2_walls", "?")
+    current_player = game_state.get("current_player", "?")
+
+    # Create a short representation of placed walls, e.g., "WHC4,WVE6"
+    walls_short = []
+    for wall_str in game_state.get("placed_walls", []):
+        parts = wall_str.split()
+        if len(parts) == 3:
+            # e.g., from "WALL H C4" -> "WHC4"
+            walls_short.append(f"W{parts[1]}{parts[2]}")
+
+    walls_log_str = ",".join(sorted(walls_short)) if walls_short else "[]"
+
+    # P1 is the Bot, P2 is the Human
+    return f"[G1/T{turn_num}] P{current_player} S(B:{p1_pos}({p1_walls}) H:{p2_pos}({p2_walls})|W:{walls_log_str})"
 
 # --- Helper to Run Bot Turn ---
 def run_bot_turn():
-    """Finds and makes the Bot's move. Modifies global 'game'."""
-    global game # Need to modify the global game state
+    """Finds and makes the Bot's move. Modifies the global 'game' object."""
+    global game # The global game state is modified by this function
 
-    if game.current_player != BOT_PLAYER_ID:
-        print(f"Error: run_bot_turn called when it is P{game.current_player}'s turn.")
+    if game.get_current_player() != BOT_PLAYER_ID:
+        print(f"Error: run_bot_turn called when it is P{game.get_current_player()}'s turn.")
         return "Error: Not Bot's turn"
 
-    print(f"{fss(game.get_state_dict(), turn_count)} - Bot Turn Start")
+    print(f"{format_game_state_for_log(game.get_state_dict(), turn_count)} - Bot Turn Start")
 
-    # Find the best move using the bot's algorithm
-    # Pass a copy of the game state to find_best_move if it modifies it internally for safety
-    # but current find_best_move uses deepcopy internally for simulations
-    best_move = bot.find_best_move(game) # Bot internal logging happens here
+    best_move = bot.find_best_move(game) # Bot's internal logging happens here
 
-    status_message = f"P{BOT_PLAYER_ID}(Bot) Thinking..." # Default
-    move_played = None
+    status_message = f"P{BOT_PLAYER_ID}(Bot) Thinking..."
 
     if best_move:
         # Attempt to make the move chosen by the bot
-        success, reason_code = game.make_move(best_move)
+        success, result = game.make_move(best_move)
         if success:
-            move_played = best_move
             status_message = f"P{BOT_PLAYER_ID}(Bot) OK: {best_move}"
-            print(f"  OK: P{BOT_PLAYER_ID} ply {best_move}")
-            # Player is switched by make_move
+            print(f"  OK: P{BOT_PLAYER_ID} played {best_move}")
+            # The game logic in make_move handles switching the current player
         else:
             # This should ideally NOT happen if find_best_move guarantees validity
-            status_message = f"P{BOT_PLAYER_ID}(Bot) ERR: Sug. {best_move} Fail({reason_code}) - Skipping!"
-            print(f"!!CRIT F: Bot suggested invalid move '{best_move}' Rsn:{reason_code}. Skipping.")
-            game.current_player = game.get_opponent(BOT_PLAYER_ID) # Manual skip
+            reason_code = result
+            status_message = f"P{BOT_PLAYER_ID}(Bot) ERR: Suggested {best_move} failed ({reason_code}) - Skipping!"
+            print(f"!!CRITICAL FAILURE: Bot suggested invalid move '{best_move}'. Reason: {reason_code}. Skipping turn.")
+            game.current_player = game.get_opponent(BOT_PLAYER_ID) # Manual skip to prevent game stall
     else:
         # Bot failed to find any move
         status_message = f"P{BOT_PLAYER_ID}(Bot) ERR: No valid moves found - Skipping!"
-        print(f"!!CRIT F: Bot P{BOT_PLAYER_ID} found no moves. Skipping.")
+        print(f"!!CRITICAL FAILURE: Bot P{BOT_PLAYER_ID} found no valid moves. Skipping turn.")
         game.current_player = game.get_opponent(BOT_PLAYER_ID) # Manual skip
 
-    return status_message # Return status string
+    return status_message
 
 # --- Routes ---
 @app.route('/')
@@ -90,79 +101,110 @@ def index():
 @app.route('/start_game', methods=['POST'])
 def start_game():
     global game, turn_count, game_active
-    print("\n[LOG] ### G START ###")
-    game = QuoridorGame(); turn_count = 1; game_active = True
-    initial_state = game.get_state_dict(); print(f"{fss(initial_state, turn_count)} - Init State")
+    print("\n[LOG] ### GAME START ###")
+    game = QuoridorGame()
+    turn_count = 1
+    game_active = True
+
+    initial_state = game.get_state_dict()
+    print(f"{format_game_state_for_log(initial_state, turn_count)} - Initial State")
     status_msg = "Game Started!"
 
-    # If Bot starts (P1), run its first turn
+    # If Bot is Player 1, it takes the first turn
     if initial_state.get('current_player') == BOT_PLAYER_ID:
-         print("[LOG] Init Bot Turn...")
-         status_msg = run_bot_turn() # Run bot turn, updates global 'game'
-         final_state_after_bot = game.get_state_dict()
+        print("[LOG] Bot is Player 1, running initial turn...")
+        status_msg = run_bot_turn() # This updates the global 'game' object
+        final_state_after_bot = game.get_state_dict()
     else:
-         final_state_after_bot = initial_state
-         status_msg = "Game Started! Your turn(P2)."
+        final_state_after_bot = initial_state
+        status_msg = "Game Started! Your turn (Player 2)."
 
-    response_state = final_state_after_bot; response_state['status_message'] = status_msg
-    response_state['turn_count'] = turn_count; response_state['game_active'] = game_active
+    # Prepare and send the initial response
+    response_state = final_state_after_bot
+    response_state['status_message'] = status_msg
+    response_state['turn_count'] = turn_count
+    response_state['game_active'] = game_active
     response_state['human_player_id'] = HUMAN_PLAYER_ID
     return jsonify({"success": True, "message": status_msg, "game_state": response_state})
 
 @app.route('/make_human_move', methods=['POST'])
 def make_human_move():
     global game, turn_count, game_active
-    success = False; reason = "Invalid request"; status_message = "Error"
 
-    if not game_active or game.is_game_over(): reason = "G Inactive/Over"; return jsonify({"success": False, "reason": reason, "game_state": game.get_state_dict()})
-    if game.current_player != HUMAN_PLAYER_ID: reason = "Not Your Turn"; return jsonify({"success": False, "reason": reason, "game_state": game.get_state_dict()})
+    if not game_active or game.is_game_over():
+        return jsonify({"success": False, "reason": "Game is not active or is over.", "game_state": game.get_state_dict()})
+    if game.get_current_player() != HUMAN_PLAYER_ID:
+        return jsonify({"success": False, "reason": "It's not your turn.", "game_state": game.get_state_dict()})
 
-    data = request.get_json(); move_string = data.get('move')
-    if not move_string: reason = "No Move"; return jsonify({"success": False, "reason": reason, "game_state": game.get_state_dict()})
+    data = request.get_json()
+    move_string = data.get('move')
+    if not move_string:
+        return jsonify({"success": False, "reason": "No move string provided.", "game_state": game.get_state_dict()})
 
-    print(f"{fss(game.get_state_dict(), turn_count)} - H Recv: '{move_string}'")
+    print(f"{format_game_state_for_log(game.get_state_dict(), turn_count)} - Human Recv: '{move_string}'")
 
-    # Attempt human move
-    success, reason_code = game.make_move(move_string)
+    # Attempt to make the human's move
+    success, result = game.make_move(move_string)
 
     if success:
-        print(f"  OK P{HUMAN_PLAYER_ID}(H) ply {move_string}")
+        print(f"  OK: P{HUMAN_PLAYER_ID}(Human) played {move_string}")
         status_message = f"P{HUMAN_PLAYER_ID}(You) OK: {move_string}"
-        reason = None
-        # Human move OK, trigger Bot turn if game not over
+        reason = None # No failure reason
+
+        # If the game isn't over after the human's move, trigger the bot's turn
         if not game.is_game_over():
-             # It is now Bot's turn (make_move switched player)
-             bot_status = run_bot_turn() # Run bot turn, updates global 'game'
-             status_message = bot_status # Report Bot's status
-             # Increment turn count AFTER P2(H) moves AND P1(B) responds
-             turn_count += 1
-        else: # Human won
-             status_message = f"G Over! P{game.winner}(You) Wins!"; game_active = False
-             print(f"[LOG] ### G OVER ### W: P{game.winner} H")
-    else: # Human move failed
-        print(f"  F P{HUMAN_PLAYER_ID}(H) try '{move_string}'. R:{reason_code}")
-        status_message = f"Your Move F: '{move_string}' ({reason_code})"; reason = reason_code
+            bot_status = run_bot_turn() # This updates the global 'game' object
+            status_message = bot_status # The bot's status is now the primary message
+            # Increment turn count ONLY after a full round (P2 Human, P1 Bot)
+            turn_count += 1
+        else:
+            status_message = f"Game Over! Player {game.get_winner()}(You) Wins!"
+            game_active = False
+            print(f"[LOG] ### GAME OVER ### Winner: P{game.get_winner()} (Human)")
+    else:
+        # Human move failed
+        reason_code = result
+        print(f"  FAIL: P{HUMAN_PLAYER_ID}(Human) tried '{move_string}'. Reason: {reason_code}")
+        status_message = f"Your Move Failed: '{move_string}' ({reason_code})"
+        reason = reason_code
 
-    # Check for Bot win after its potential turn
-    if game.is_game_over() and game.winner == BOT_PLAYER_ID:
-        status_message = f"G Over! P{game.winner}(Bot) Wins!"; game_active = False
-        print(f"[LOG] ### G OVER ### W: P{game.winner} B")
+    # Check for a bot win after its potential turn
+    if game.is_game_over() and game.get_winner() == BOT_PLAYER_ID:
+        status_message = f"Game Over! Player {game.get_winner()}(Bot) Wins!"
+        game_active = False
+        print(f"[LOG] ### GAME OVER ### Winner: P{game.get_winner()} (Bot)")
 
-    final_state = game.get_state_dict(); final_state['status_message'] = status_message; final_state['turn_count'] = turn_count
-    final_state['game_active'] = game_active; final_state['human_player_id'] = HUMAN_PLAYER_ID
+    # Prepare and send the final response for this turn
+    final_state = game.get_state_dict()
+    final_state['status_message'] = status_message
+    final_state['turn_count'] = turn_count
+    final_state['game_active'] = game_active
+    final_state['human_player_id'] = HUMAN_PLAYER_ID
     return jsonify({"success": success, "reason": reason, "game_state": final_state})
 
-@app.route('/game_state') # Polling endpoint
+@app.route('/game_state')
 def get_game_state_poll():
+    """Endpoint for the client to poll for the latest game state."""
     global game_active, turn_count
-    cs = game.get_state_dict(); cs['turn_count'] = turn_count
-    cs['game_active'] = game_active; cs['human_player_id'] = HUMAN_PLAYER_ID
-    if game.is_game_over(): cs['status_message'] = f"G Over! P{game.winner} Wins!"
-    elif not game_active: cs['status_message'] = "Click Start"
-    elif cs['current_player'] == HUMAN_PLAYER_ID: cs['status_message'] = f"Your turn(P{HUMAN_PLAYER_ID})"
-    else: cs['status_message'] = f"P{BOT_PLAYER_ID}(Bot) Thinking..." # Status while Bot turn is pending user action
-    # print(f"-> Poll Snd: {fss(cs, turn_count)}") # Optional verbose polling log
-    return jsonify(cs)
+
+    current_state = game.get_state_dict()
+    current_state['turn_count'] = turn_count
+    current_state['game_active'] = game_active
+    current_state['human_player_id'] = HUMAN_PLAYER_ID
+
+    # Determine the status message based on the game state
+    if game.is_game_over():
+        current_state['status_message'] = f"Game Over! Player {game.get_winner()} Wins!"
+    elif not game_active:
+        current_state['status_message'] = "Click 'Start Game' to begin."
+    elif current_state['current_player'] == HUMAN_PLAYER_ID:
+        current_state['status_message'] = f"Your turn (Player {HUMAN_PLAYER_ID})"
+    else:
+        current_state['status_message'] = f"Player {BOT_PLAYER_ID}(Bot) is thinking..."
+
+    # Optional: Verbose logging for every poll request can be noisy.
+    # print(f"-> Poll Snd: {format_game_state_for_log(current_state, turn_count)}")
+    return jsonify(current_state)
 
 if __name__ == '__main__':
     print("Starting Flask server Quoridor(Human vs AlgoBot)...")

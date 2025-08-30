@@ -1,13 +1,12 @@
-# quoridor_bot.py (Algorithmic Bot - Goal Proximity Bonus Added)
+# quoridor_bot.py (Refactored for performance and readability)
 
 import math
 import random
 import time
-import copy # Needed for deep copying game states during search
 
 try:
     # Import the game logic class and constants
-    from quoridor_logic import QuoridorGame, BOARD_SIZE, R_OK, INITIAL_WALLS
+    from quoridor_logic import QuoridorGame, BOARD_SIZE, R_OK
 except ImportError as e:
     print(f"Error importing QuoridorGame: {e}")
     import sys
@@ -17,9 +16,10 @@ except ImportError as e:
 class QuoridorBot:
     """
     An AI agent for playing Quoridor using Minimax with Alpha-Beta Pruning.
-    Includes a goal proximity bonus in evaluation.
+    This version is optimized to avoid deep copying game states by using
+    an undo_move method on the game object.
     """
-    def __init__(self, player_id, search_depth=3): # Default depth 3
+    def __init__(self, player_id, search_depth=3):
         """
         Initializes the bot.
         Args:
@@ -31,197 +31,150 @@ class QuoridorBot:
         self.player_id = player_id
         self.opponent_id = 3 - player_id
         self.search_depth = max(1, search_depth)
-        self.transposition_table = {}
+        self.transposition_table = {} # Optimization: Not yet implemented
         self.nodes_visited = 0
         print(f"Initialized AlgoBot for P{self.player_id} | Depth={self.search_depth}")
 
-    def evaluate_state(self, game_state: QuoridorGame, perspective_player_id: int):
+    def evaluate_state(self, game_state: QuoridorGame):
         """
-        Evaluates the game state from the perspective of 'perspective_player_id'.
-        Higher score is better for that player. Includes goal proximity bonus.
+        Evaluates the game state from the perspective of this bot.
+        Higher score is better for the bot.
         """
         winner = game_state.get_winner()
-        my_id = perspective_player_id
-        opp_id = 3 - my_id
+        if winner == self.player_id: return float('inf')
+        if winner == self.opponent_id: return float('-inf')
 
-        if winner == my_id: return float('inf')
-        if winner == opp_id: return float('-inf')
+        my_path_len = game_state.bfs_shortest_path_length(self.player_id)
+        opp_path_len = game_state.bfs_shortest_path_length(self.opponent_id)
 
-        my_path_len = game_state.bfs_shortest_path_length(my_id)
-        opp_path_len = game_state.bfs_shortest_path_length(opp_id)
+        if my_path_len == float('inf'): return float('-inf')
+        if opp_path_len == float('inf'): return float('inf')
 
-        if my_path_len == float('inf'): return float('-inf') # Cannot win
-        if opp_path_len == float('inf'): return float('inf')  # Opponent cannot win
-
-        # Core evaluation: Path difference
+        # Core evaluation: Difference in shortest path to goal
         score = float(opp_path_len - my_path_len)
 
-        # Wall Advantage
+        # Wall Advantage: A small bonus for having more walls left
         wall_weight = 0.1
-        my_walls = game_state.get_walls_left(my_id)
-        opp_walls = game_state.get_walls_left(opp_id)
+        my_walls = game_state.get_walls_left(self.player_id)
+        opp_walls = game_state.get_walls_left(self.opponent_id)
         score += float((my_walls - opp_walls) * wall_weight)
 
-        # --- Goal Proximity Bonus ---
-        K_PROXIMITY = 50 # Bonus factor - Tune this value if needed
+        # Goal Proximity Bonus: A bonus for being closer to the goal
+        # This incentivizes progress, especially when path difference is small.
+        PROXIMITY_BONUS_FACTOR = 50
         if my_path_len > 0:
-             # Add bonus inversely proportional to *my* distance
-             score += K_PROXIMITY / my_path_len
-        # Optional: Subtract bonus based on opponent's distance?
-        # if opp_path_len > 0:
-        #     score -= (K_PROXIMITY / opp_path_len) * 0.5 # Smaller penalty for opponent being close
+            score += PROXIMITY_BONUS_FACTOR / my_path_len
 
         return score
 
     def _get_ordered_moves(self, game_state: QuoridorGame, player_id: int):
-        """ Generates and orders valid moves heuristically. """
-        valid_pawn_tuples = game_state.get_valid_pawn_moves(player_id)
-        pawn_moves = []
+        """ Generates and heuristically orders valid moves to improve alpha-beta pruning. """
+        pawn_moves_with_scores = []
         current_pos = game_state.get_pawn_position(player_id)
         goal_row = BOARD_SIZE - 1 if player_id == 1 else 0
 
         if current_pos:
+            valid_pawn_tuples = game_state.get_valid_pawn_moves(player_id)
             for pos in valid_pawn_tuples:
                 coord_str = game_state._pos_to_coord(pos)
                 if not coord_str: continue
-                move_str = f"MOVE {coord_str}"
-                dist_change = abs(pos[0] - goal_row) - abs(current_pos[0] - goal_row)
-                pawn_moves.append((dist_change, move_str))
-            pawn_moves.sort(key=lambda x: x[0])
-            ordered_pawn_moves = [move for _, move in pawn_moves]
-        else: ordered_pawn_moves = []
 
-        valid_walls = game_state.get_valid_wall_placements(player_id) if game_state.get_walls_left(player_id) > 0 else []
+                # Prioritize moves that advance towards the goal
+                dist_change = abs(pos[0] - goal_row) - abs(current_pos[0] - goal_row)
+                pawn_moves_with_scores.append((dist_change, f"MOVE {coord_str}"))
+
+            # Sort pawn moves: advancing > sideways > retreating
+            pawn_moves_with_scores.sort(key=lambda x: x[0])
+            ordered_pawn_moves = [move for _, move in pawn_moves_with_scores]
+        else:
+            ordered_pawn_moves = []
+
+        # Wall placements are generally considered after pawn moves
+        valid_walls = game_state.get_valid_wall_placements(player_id)
         return ordered_pawn_moves + valid_walls
 
-
-    def minimax_alpha_beta(self, game_state: QuoridorGame, depth: int, alpha: float, beta: float, maximizing_player: bool):
-        """ Minimax algorithm with Alpha-Beta Pruning. """
+    def _minimax_alpha_beta(self, game_state: QuoridorGame, depth: int, alpha: float, beta: float, is_maximizing_player: bool):
+        """ Minimax algorithm with Alpha-Beta Pruning using make_move and undo_move. """
         self.nodes_visited += 1
 
         if depth == 0 or game_state.is_game_over():
-            # Evaluate always from the perspective of the bot running the search
-            score = self.evaluate_state(game_state, self.player_id)
-            return score
+            return self.evaluate_state(game_state)
 
-        current_player_turn = game_state.current_player
+        current_player_turn = game_state.get_current_player()
         possible_moves = self._get_ordered_moves(game_state, current_player_turn)
 
         if not possible_moves:
-             return float('-inf') if current_player_turn == self.player_id else float('inf')
+            # If a player has no moves, it's a loss for them.
+            return float('-inf') if current_player_turn == self.player_id else float('inf')
 
-        if maximizing_player:
+        if is_maximizing_player:
             max_eval = float('-inf')
             for move in possible_moves:
-                try:
-                    child_state = copy.deepcopy(game_state)
-                    success, _ = child_state.make_move(move)
-                    if not success: continue
-                    eval_score = self.minimax_alpha_beta(child_state, depth - 1, alpha, beta, False)
-                    max_eval = max(max_eval, eval_score)
-                    alpha = max(alpha, eval_score)
-                    if beta <= alpha: break
-                except Exception as e: print(f"!! Err MAX sim move {move}: {e}"); continue
+                success, move_obj = game_state.make_move(move)
+                if not success: continue
+
+                eval_score = self._minimax_alpha_beta(game_state, depth - 1, alpha, beta, False)
+                game_state.undo_move(move_obj) # Backtrack
+
+                max_eval = max(max_eval, eval_score)
+                alpha = max(alpha, eval_score)
+                if beta <= alpha:
+                    break # Prune
             return max_eval
-        else: # Minimizing player
+        else:  # Minimizing player
             min_eval = float('inf')
             for move in possible_moves:
-                try:
-                    child_state = copy.deepcopy(game_state)
-                    success, _ = child_state.make_move(move)
-                    if not success: continue
-                    eval_score = self.minimax_alpha_beta(child_state, depth - 1, alpha, beta, True)
-                    min_eval = min(min_eval, eval_score)
-                    beta = min(beta, eval_score)
-                    if beta <= alpha: break
-                except Exception as e: print(f"!! Err MIN sim move {move}: {e}"); continue
+                success, move_obj = game_state.make_move(move)
+                if not success: continue
+
+                eval_score = self._minimax_alpha_beta(game_state, depth - 1, alpha, beta, True)
+                game_state.undo_move(move_obj) # Backtrack
+
+                min_eval = min(min_eval, eval_score)
+                beta = min(beta, eval_score)
+                if beta <= alpha:
+                    break # Prune
             return min_eval
 
-
     def find_best_move(self, game_state: QuoridorGame):
-        """ Finds the best move using Minimax with Alpha-Beta Pruning. """
-        start_time = time.time(); self.nodes_visited = 0
-        print(f"Bot P{self.player_id}: Finding best move (Depth={self.search_depth})...")
+        """ Finds the best move for the bot using the Minimax search. """
+        start_time = time.time()
+        self.nodes_visited = 0
 
-        if game_state.current_player != self.player_id:
-            print(f"Error: find_best_move called when not P{self.player_id}'s turn."); return None
+        if game_state.get_current_player() != self.player_id:
+            print(f"Error: find_best_move called when not P{self.player_id}'s turn.")
+            return None
 
         possible_moves = self._get_ordered_moves(game_state, self.player_id)
-        if not possible_moves: print(f"Bot P{self.player_id}: No valid moves!"); return None
+        if not possible_moves:
+            print(f"Bot P{self.player_id}: No valid moves found!")
+            return None
 
-        best_move = possible_moves[0]; max_eval = float('-inf')
-        alpha = float('-inf'); beta = float('inf')
+        best_move = possible_moves[0]
+        max_eval = float('-inf')
+        alpha = float('-inf')
+        beta = float('inf')
+
+        print(f"Bot P{self.player_id}: Finding best move (Depth={self.search_depth})...")
 
         for move in possible_moves:
-            try:
-                # print(f"  Testing move: {move}") # Debug
-                child_state = copy.deepcopy(game_state)
-                success, _ = child_state.make_move(move)
-                if not success: print(f"  Skipping invalid sim for {move} at root."); continue
+            success, move_obj = game_state.make_move(move)
+            if not success:
+                print(f"  Skipping invalid simulation for move '{move}' at root.")
+                continue
 
-                eval_score = self.minimax_alpha_beta(child_state, self.search_depth - 1, alpha, beta, False)
-                # print(f"  Move: {move} -> Score: {eval_score:.2f}") # Debug
+            # In the root call, the next turn is the opponent's (minimizing player)
+            eval_score = self._minimax_alpha_beta(game_state, self.search_depth - 1, alpha, beta, False)
+            game_state.undo_move(move_obj) # Undo the move after simulation
 
-                if eval_score > max_eval:
-                    max_eval = eval_score
-                    best_move = move
-                alpha = max(alpha, eval_score)
+            if eval_score > max_eval:
+                max_eval = eval_score
+                best_move = move
 
-            except Exception as e: print(f"!! Error ROOT sim move {move}: {e}"); continue
+            alpha = max(alpha, eval_score)
 
         end_time = time.time()
         print(f"Bot P{self.player_id}: Best move: {best_move} | Score: {max_eval:.2f} | Nodes: {self.nodes_visited} | Time: {end_time - start_time:.3f}s")
         return best_move
 
-# --- Example Usage / Self-Tests ---
-if __name__ == "__main__":
-    print("--- Testing QuoridorBot with Minimax (Goal Proximity Bonus) ---")
-    # Use Depth 2 for faster self-test runs
-    test_depth = 2
-    bot1 = QuoridorBot(player_id=1, search_depth=test_depth)
-    bot2 = QuoridorBot(player_id=2, search_depth=test_depth)
-    test_game = QuoridorGame()
-
-
-    print("\n--- Initial State ---")
-    score1 = bot1.evaluate_state(test_game, 1)
-    score2 = bot2.evaluate_state(test_game, 2)
-    print(f"Initial Eval: P1 Score = {score1:.2f}, P2 Score = {score2:.2f}") # Expect ~5.6, ~5.6
-
-    print("\n--- Bot 1 Finding First Move ---")
-    move1 = bot1.find_best_move(test_game)
-    print(f"Bot 1 suggests: {move1}")
-    if move1: res1, rea1 = test_game.make_move(move1)
-
-    print("\n--- Bot 2 Finding First Move ---")
-    if test_game.current_player == bot2.player_id:
-        move2 = bot2.find_best_move(test_game)
-        print(f"Bot 2 suggests: {move2}")
-        if move2: res2, rea2 = test_game.make_move(move2)
-    else: print("Error: Not Bot 2's turn.")
-
-    print(f"\n--- State after 1 round ---")
-    score1_r1 = bot1.evaluate_state(test_game, 1)
-    score2_r1 = bot2.evaluate_state(test_game, 2)
-    print(f"Current State Eval: P1 Score = {score1_r1:.2f}, P2 Score = {score2_r1:.2f}")
-    print(f"Board: P1@{test_game.get_pawn_coord(1)} P2@{test_game.get_pawn_coord(2)}")
-
-    print("\n--- Bot 1 Finding Second Move ---")
-    if test_game.current_player == bot1.player_id:
-        move3 = bot1.find_best_move(test_game)
-        print(f"Bot 1 suggests: {move3}")
-    else: print("Error: Not Bot 1's turn.")
-
-
-    # --- Corrected Wall Evaluation Test (Using the bot's eval) ---
-    print("\n--- Testing Evaluation with Wall ---")
-    test_game_with_wall = QuoridorGame(); test_game_with_wall.pawn_positions[1] = (1, 4); test_game_with_wall.pawn_positions[2] = (7, 4); test_game_with_wall.placed_walls.add(('H', 1, 4)); test_game_with_wall.walls_left[1] = 9; print(f"State: P1@E2, P2@E8, Wall H E2")
-    score1_wall = bot1.evaluate_state(test_game_with_wall, 1) # Eval for P1
-    score2_wall = bot2.evaluate_state(test_game_with_wall, 2) # Eval for P2
-    print(f"Eval with WALL H E2: P1 Score = {score1_wall:.2f}, P2 Score = {score2_wall:.2f}") # Expect P1 score < P2 score
-
-    # --- Trapped Test ---
-    print("\n--- Testing Trapped Evaluation ---")
-    game_trap = QuoridorGame(); walls_to_add = [('H',0,3),('H',0,4),('V',0,2),('V',1,2),('V',0,5),('V',1,5),('H',1,3),('H',1,4)]; [game_trap.placed_walls.add(w) for w in walls_to_add]
-    trap_score1 = bot1.evaluate_state(game_trap, 1)
-    print(f"Trapped P1 evaluation = {trap_score1}") # Expect -inf
+# (Self-tests moved to tests/test_game.py)
