@@ -59,9 +59,9 @@ body {
     line-height: 1.7;
     display: flex;
     justify-content: center;
-    align-items: center; /* Center vertically */
+    align-items: flex-start; /* Align content to the top */
     min-height: 100vh;
-    padding: var(--padding-lg);
+    padding: var(--padding-md) var(--padding-lg); /* Adjust top/bottom padding */
     overflow-x: hidden;
 }
 
