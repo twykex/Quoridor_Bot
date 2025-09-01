@@ -166,4 +166,4 @@ def get_game_state_poll():
 
 if __name__ == '__main__':
     print("Starting Flask server Quoridor(Human vs AlgoBot)...")
-    app.run(debug=False, host='0.0.0.0', port=25565)
+    app.run(debug=False, host='0.0.0.0', port=8123)
