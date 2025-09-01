@@ -28,6 +28,8 @@ const selectedMoveLabel = document.getElementById('selected-move-label'); // Get
 const selectedMoveValue = document.getElementById('selected-move-value'); // Renamed from selectedMoveSpan
 const confirmMoveButton = document.getElementById('confirm-move-button');
 const cancelMoveButton = document.getElementById('cancel-move-button');
+const howToPlayToggle = document.querySelector('.how-to-play h2');
+const howToPlayContent = document.querySelector('.how-to-play .rules-content');
 
 // --- SVG/Drawing Configuration ---
 let CELL_SIZE = 55;
@@ -593,6 +595,14 @@ startButton.addEventListener('click', handleStartGame);
 svgBoard.addEventListener('click', handleBoardClick); // Listener on the main SVG
 confirmMoveButton.addEventListener('click', confirmMove);
 cancelMoveButton.addEventListener('click', cancelMove);
+howToPlayToggle.addEventListener('click', () => {
+    if (howToPlayContent.style.display === 'block') {
+        howToPlayContent.style.display = 'none';
+    } else {
+        howToPlayContent.style.display = 'block';
+    }
+});
+
 // Corrected Resize Listener
 let resizeTimeout;
 window.addEventListener('resize', () => {

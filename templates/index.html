@@ -3,116 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quoridor - Human vs LLM</title> <!-- Title for Human vs Bot game -->
+    <title>Quoridor Arena</title>
 
-    <!-- Google Fonts -->
+    <!-- Google Fonts and Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Using Inter font for a clean look -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
     <!-- Link CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <!-- Main container for centering content -->
     <div class="game-container">
 
-        <!-- Header Section -->
         <header class="game-header">
-            <h1>Quoridor Arena</h1> <!-- Updated Title -->
+            <h1>Quoridor Arena</h1>
+            <p class="subtitle">A strategic board game of walls and wits. Outsmart the bot to win!</p>
             <div class="player-labels">
-                <span>P1: Bot</span> <!-- Label for Player 1 -->
+                <span class="player-label p1-label"><i class="material-icons">smart_toy</i> P1: Bot</span>
                 <span>vs</span>
-                <span>P2: You</span> <!-- Label for Player 2 (Human) -->
+                <span class="player-label p2-label"><i class="material-icons">person</i> P2: You</span>
             </div>
         </header>
 
-        <!-- Main content area with board and info panel -->
         <main class="game-main">
 
-            <!-- Area dedicated to the game board -->
             <div class="game-board-area">
                 <div class="board-container">
-                    <!-- SVG element for the board graphics -->
-                    <svg id="quoridor-board"
-                         preserveAspectRatio="xMidYMid meet"
-                         viewBox="0 0 600 600"> <!-- Initial viewbox, JS might update -->
-
-                         <!-- SVG Definitions for gradients, filters etc. -->
-                         <defs></defs>
-
-                         <!-- SVG Layers for drawing elements -->
-                         <g id="goal-layer"></g>    <!-- Background Goal Cells -->
-                         <g id="grid-layer"></g>    <!-- Grid Lines -->
-                         <g id="wall-layer"></g>    <!-- Walls -->
-                         <g id="potential-move-layer"></g> <!-- Highlights for valid moves -->
-                         <g id="pawn-layer"></g>    <!-- Pawns (drawn above highlights) -->
-                         <g id="interaction-layer"></g>   <!-- Invisible layer for click detection (might be unused) -->
+                    <svg id="quoridor-board" preserveAspectRatio="xMidYMid meet" viewBox="0 0 600 600">
+                        <defs></defs>
+                        <g id="goal-layer"></g>
+                        <g id="grid-layer"></g>
+                        <g id="wall-layer"></g>
+                        <g id="potential-move-layer"></g>
+                        <g id="pawn-layer"></g>
+                        <g id="interaction-layer"></g>
                     </svg>
                 </div>
             </div>
 
-            <!-- Sidebar for game information and controls -->
             <aside class="game-info-panel">
 
-                <!-- Card for displaying game status -->
                 <div class="info-card status-card">
-                    <h2>Status</h2>
+                    <h2><i class="material-icons">dvr</i> Status</h2>
                     <p id="turn-info">Turn: -</p>
-                    <p id="player-info">Current Player: -</p>
+                    <div class="player-info-container">
+                        <p id="player-info">Current Player: -</p>
+                        <div class="thinking-animation">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
                     <p id="status-message" class="status-text">Click Start Game</p>
-                    <p id="error-message" class="error-text"></p> <!-- Area for error messages -->
+                    <p id="error-message" class="error-text"></p>
                 </div>
 
-                <!-- Card for displaying player resources (walls) -->
                 <div class="info-card player-stats">
-                     <h2>Resources</h2>
+                     <h2><i class="material-icons">inventory_2</i> Resources</h2>
                      <div class="player-resource">
-                         <span>P1 (Bot) Walls:</span> <!-- Changed LLM to Bot -->
+                         <span><i class="material-icons">smart_toy</i> P1 (Bot) Walls:</span>
                          <span id="p1-walls-info">10</span>
                      </div>
                      <div class="player-resource">
-                         <span>P2 (You) Walls:</span>
+                         <span><i class="material-icons">person</i> P2 (You) Walls:</span>
                          <span id="p2-walls-info">10</span>
                      </div>
                 </div>
 
-                <!-- Card for game controls -->
                 <div class="info-card controls-card">
-                    <h2>Controls</h2>
-                    <!-- Start/Restart Button -->
-                    <button id="start-button" class="button-primary">Start Game</button>
+                    <h2><i class="material-icons">gamepad</i> Controls</h2>
+                    <button id="start-button" class="button-primary"><i class="material-icons">play_arrow</i> Start Game</button>
 
-                    <!-- Area for confirming/canceling selected move (initially hidden) -->
                     <div id="move-input-area" class="move-input inactive">
                         <span id="selected-move-label">Selected:</span>
-                        <span id="selected-move-value">-</span> <!-- Display selected move text -->
+                        <span id="selected-move-value">-</span>
                         <div class="confirm-buttons">
-                            <button id="confirm-move-button" class="button-confirm" disabled>Confirm</button>
-                            <button id="cancel-move-button" class="button-cancel">Cancel</button>
+                            <button id="confirm-move-button" class="button-confirm" disabled><i class="material-icons">check_circle</i> Confirm</button>
+                            <button id="cancel-move-button" class="button-cancel"><i class="material-icons">cancel</i> Cancel</button>
                         </div>
                     </div>
                 </div>
 
-                 <!-- Placeholder for future move history section -->
-                 <!-- <div class="info-card move-history">
-                     <h2>Move History</h2>
-                     <ul id="move-list"> -->
-                         <!-- JS would populate this -->
-                     <!-- </ul>
-                 </div> -->
+                <div class="info-card how-to-play">
+                    <h2><i class="material-icons">help_outline</i> How to Play</h2>
+                    <div class="rules-content">
+                        <p><strong>Objective:</strong> Be the first player to reach the opposite side of the board.</p>
+                        <ul>
+                            <li>On your turn, you can either <strong>move your pawn</strong> or <strong>place a wall</strong>.</li>
+                            <li>Pawns move one square at a time (horizontally or vertically).</li>
+                            <li>If an opponent's pawn is adjacent, you can jump over it.</li>
+                            <li>Walls block movement and must not completely block off a player's path to their goal.</li>
+                        </ul>
+                    </div>
+                </div>
 
-            </aside> <!-- /game-info-panel -->
-        </main> <!-- /game-main -->
+            </aside>
 
-    </div> <!-- /game-container -->
+        </main>
 
-    <!-- Hidden inputs to pass data from Flask to JavaScript -->
+    </div>
+
     <input type="hidden" id="board-size" value="{{ board_size }}">
     <input type="hidden" id="human-player-id" value="{{ human_player_id }}">
 
-    <!-- Link JavaScript -->
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
