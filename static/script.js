@@ -417,36 +417,13 @@ function enableHumanTurn(gameState) {
     statusMessageSpan.textContent = "Your Turn! Select a move.";
     svgBoard.style.cursor = 'pointer'; // Indicate board is clickable
 
-    // --- Simulate or Fetch Valid Moves ---
-    // TODO: Fetch valid moves from backend for accuracy
-    validHumanMoves.pawn = [];
-    validHumanMoves.wall = []; // Reset
-
-    const humanPosStr = gameState.p2_pos; // Assuming Human is P2
-    const humanPos = coordToPos(humanPosStr);
-    const botPosStr = gameState.p1_pos; // Changed llm to bot
-    const botPos = coordToPos(botPosStr);
-
-    if (humanPos) {
-        // Simple orthogonal check (NO JUMPS/WALLS CHECKED HERE - FOR VISUAL HINTS ONLY)
-        const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-        directions.forEach(([dr, dc]) => {
-            const tr = humanPos.r + dr;
-            const tc = humanPos.c + dc;
-            const targetCoord = posToCoord(tr, tc);
-            // Basic checks: on board, not Bot pos
-            if (targetCoord && !(botPos && tr === botPos.r && tc === botPos.c)) {
-                 // TODO: Add basic wall check simulation here if desired
-                 validHumanMoves.pawn.push(targetCoord);
-            }
-        });
-         // TODO: Add basic jump hint simulation if desired
-    }
-    // TODO: Fetch or calculate valid walls for highlighting
-    // validHumanMoves.wall = calculateValidWallsFrontend();
+    // --- Use Valid Moves from Backend ---
+    const validMoves = gameState.valid_moves || { pawn: [], wall: [] };
+    validHumanMoves.pawn = validMoves.pawn;
+    validHumanMoves.wall = validMoves.wall;
 
     drawPotentialMoves(validHumanMoves.pawn, validHumanMoves.wall); // Highlight moves
-    console.log("Human turn enabled. Basic pawn hints:", validHumanMoves.pawn);
+    console.log("Human turn enabled. Valid moves fetched from backend:", validHumanMoves);
 }
 
 function handleBoardClick(event) {
