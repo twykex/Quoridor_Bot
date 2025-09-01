@@ -35,6 +35,17 @@ class QuoridorBot:
         self.nodes_visited = 0
         print(f"Initialized AlgoBot for P{self.player_id} | Depth={self.search_depth}")
 
+    def _get_state_key(self, game_state: QuoridorGame):
+        """
+        Creates a hashable key representing the current game state.
+        """
+        return (
+            frozenset(game_state.pawn_positions.items()),
+            frozenset(game_state.placed_walls),
+            frozenset(game_state.walls_left.items()),
+            game_state.current_player
+        )
+
     def evaluate_state(self, game_state: QuoridorGame, perspective_player_id: int):
         """
         Evaluates the game state from the perspective of 'perspective_player_id'.
@@ -75,6 +86,7 @@ class QuoridorBot:
 
     def _get_ordered_moves(self, game_state: QuoridorGame, player_id: int):
         """ Generates and orders valid moves heuristically. """
+        # --- Pawn Move Ordering ---
         valid_pawn_tuples = game_state.get_valid_pawn_moves(player_id)
         pawn_moves = []
         current_pos = game_state.get_pawn_position(player_id)
@@ -85,23 +97,61 @@ class QuoridorBot:
                 coord_str = game_state._pos_to_coord(pos)
                 if not coord_str: continue
                 move_str = f"MOVE {coord_str}"
+                # Prioritize moves that advance towards the goal
                 dist_change = abs(pos[0] - goal_row) - abs(current_pos[0] - goal_row)
                 pawn_moves.append((dist_change, move_str))
-            pawn_moves.sort(key=lambda x: x[0])
+            pawn_moves.sort(key=lambda x: x[0]) # Sort by smallest (most negative) distance change
             ordered_pawn_moves = [move for _, move in pawn_moves]
-        else: ordered_pawn_moves = []
+        else:
+            ordered_pawn_moves = []
 
-        valid_walls = game_state.get_valid_wall_placements(player_id) if game_state.get_walls_left(player_id) > 0 else []
-        return ordered_pawn_moves + valid_walls
+        # --- Wall Move Ordering (with impact analysis) ---
+        if game_state.get_walls_left(player_id) > 0:
+            wall_moves_with_scores = []
+            valid_walls = game_state.get_valid_wall_placements(player_id)
+            # Get path lengths *before* any new wall
+            my_path_before = game_state.bfs_shortest_path_length(self.player_id)
+            opp_path_before = game_state.bfs_shortest_path_length(self.opponent_id)
+
+            for wall_move in valid_walls:
+                temp_game = copy.deepcopy(game_state)
+                success, _ = temp_game.make_move(wall_move)
+                if not success: continue
+
+                # Get path lengths *after* the wall is placed
+                my_path_after = temp_game.bfs_shortest_path_length(self.player_id)
+                opp_path_after = temp_game.bfs_shortest_path_length(self.opponent_id)
+
+                # Calculate the impact
+                my_path_increase = my_path_after - my_path_before
+                opp_path_increase = opp_path_after - opp_path_before
+
+                # We want to maximize the opponent's path increase while minimizing ours
+                # A higher score is a better wall placement
+                wall_score = opp_path_increase - my_path_increase
+                wall_moves_with_scores.append((wall_score, wall_move))
+
+            # Sort walls from most impactful to least impactful
+            wall_moves_with_scores.sort(key=lambda x: x[0], reverse=True)
+            ordered_wall_moves = [move for _, move in wall_moves_with_scores]
+        else:
+            ordered_wall_moves = []
+
+        # Combine pawn moves and wall moves, pawn moves are generally preferred first
+        return ordered_pawn_moves + ordered_wall_moves
 
 
     def minimax_alpha_beta(self, game_state: QuoridorGame, depth: int, alpha: float, beta: float, maximizing_player: bool):
         """ Minimax algorithm with Alpha-Beta Pruning. """
         self.nodes_visited += 1
+        state_key = self._get_state_key(game_state)
+        if state_key in self.transposition_table:
+            return self.transposition_table[state_key]
 
         if depth == 0 or game_state.is_game_over():
             # Evaluate always from the perspective of the bot running the search
             score = self.evaluate_state(game_state, self.player_id)
+            self.transposition_table[state_key] = score
             return score
 
         current_player_turn = game_state.current_player
@@ -122,6 +172,7 @@ class QuoridorBot:
                     alpha = max(alpha, eval_score)
                     if beta <= alpha: break
                 except Exception as e: print(f"!! Err MAX sim move {move}: {e}"); continue
+            self.transposition_table[state_key] = max_eval
             return max_eval
         else: # Minimizing player
             min_eval = float('inf')
@@ -135,6 +186,7 @@ class QuoridorBot:
                     beta = min(beta, eval_score)
                     if beta <= alpha: break
                 except Exception as e: print(f"!! Err MIN sim move {move}: {e}"); continue
+            self.transposition_table[state_key] = min_eval
             return min_eval
 
 
