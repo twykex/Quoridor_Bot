@@ -596,10 +596,9 @@ svgBoard.addEventListener('click', handleBoardClick); // Listener on the main SV
 confirmMoveButton.addEventListener('click', confirmMove);
 cancelMoveButton.addEventListener('click', cancelMove);
 howToPlayToggle.addEventListener('click', () => {
-    if (howToPlayContent.style.display === 'block') {
-        howToPlayContent.style.display = 'none';
-    } else {
-        howToPlayContent.style.display = 'block';
+    const howToPlayCard = document.querySelector('.how-to-play');
+    if (howToPlayCard) {
+        howToPlayCard.classList.toggle('collapsed');
     }
 });
 

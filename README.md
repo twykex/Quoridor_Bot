@@ -101,9 +101,9 @@ Play the strategic board game Quoridor against an algorithmic AI opponent throug
     ```bash
     python app.py
     ```
-    You should see output like `Starting Flask server...` and `* Running on http://0.0.0.0:25565`.
+    You should see output like `Starting Flask server...` and `* Running on http://0.0.0.0:8123`.
 7.  **Play:**
-    *   Open your web browser and go to `http://localhost:25565` (or your machine's IP address on port 25565 if accessing from another device on the network).
+    *   Open your web browser and go to `http://localhost:8123` (or your machine's IP address on port 8123 if accessing from another device on the network).
     *   Click the "Start Game" button and play against the bot!
 
 ---

@@ -79,12 +79,35 @@ body {
     padding-bottom: var(--padding-md);
 }
 
-.game-header h1 {
-    font-size: 2.8em;
+.game-header .logo {
+    font-size: 3.2em; /* Increased size */
     font-weight: 700;
     letter-spacing: -1.5px;
     margin-bottom: 5px;
     color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    text-shadow: 2px 2px 15px var(--shadow-color), 0 0 5px var(--accent-primary);
+    display: inline-block; /* Allows for transform */
+    transition: transform 0.3s ease;
+}
+
+.game-header .logo:hover {
+    transform: scale(1.05); /* Slight zoom on hover */
+}
+
+.logo .logo-q {
+    color: var(--accent-primary);
+    text-shadow: 0 0 15px var(--accent-primary);
+}
+
+.logo .logo-uoridor {
+    color: var(--text-primary);
+}
+
+.logo .logo-arena {
+    color: var(--accent-secondary);
+    font-weight: 500; /* Lighter weight for contrast */
+    text-shadow: 0 0 10px var(--accent-secondary);
 }
 
 .subtitle {
@@ -412,13 +435,37 @@ body {
     gap: 10px;
 }
 
-.how-to-play h2 {
+.how-to-play h2.collapsible {
     cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none; /* Prevent text selection on click */
+}
+
+.how-to-play h2.collapsible .toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+.how-to-play.collapsed .rules-content {
+    max-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    margin-top: 0;
+    opacity: 0;
+}
+
+.how-to-play:not(.collapsed) h2.collapsible .toggle-icon {
+    transform: rotate(180deg);
 }
 
 .how-to-play .rules-content {
-    display: block;
+    /* display: block; */ /* Controlled by class now */
     padding-top: 10px;
+    transition: max-height 0.4s ease-out, opacity 0.3s ease-in-out, margin-top 0.4s ease-out, padding-top 0.4s ease-out;
+    max-height: 500px; /* Set a max-height large enough for content */
+    overflow: hidden;
+    opacity: 1;
 }
 
 .how-to-play .rules-content p,

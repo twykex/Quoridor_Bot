@@ -18,7 +18,9 @@
     <div class="game-container">
 
         <header class="game-header">
-            <h1>Quoridor Arena</h1>
+            <div class="logo">
+                <span class="logo-q">Q</span><span class="logo-uoridor">uoridor</span> <span class="logo-arena">Arena</span>
+            </div>
             <p class="subtitle">A strategic board game of walls and wits. Outsmart the bot to win!</p>
             <div class="player-labels">
                 <span class="player-label p1-label"><i class="material-icons">smart_toy</i> P1: Bot</span>
@@ -84,8 +86,11 @@
                     </div>
                 </div>
 
-                <div class="info-card how-to-play">
-                    <h2><i class="material-icons">help_outline</i> How to Play</h2>
+                <div class="info-card how-to-play collapsed">
+                    <h2 class="collapsible">
+                        <i class="material-icons">help_outline</i> How to Play
+                        <i class="material-icons toggle-icon">expand_more</i>
+                    </h2>
                     <div class="rules-content">
                         <p><strong>Objective:</strong> Be the first player to reach the opposite side of the board.</p>
                         <ul>
