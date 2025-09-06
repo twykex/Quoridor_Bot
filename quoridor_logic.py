@@ -17,10 +17,31 @@ R_WALL_OFFBOARD = "WallOffBoard"; R_WALL_OVERLAP = "WallOverlap"; R_WALL_CONFLIC
 R_WALL_PATHBLOCK = "WallPathBlock"
 
 class QuoridorGame:
-    def __init__(self):
-        self.board_size=BOARD_SIZE; self.walls_total=INITIAL_WALLS
-        self.pawn_positions={ 1:(0,4), 2:(8,4) }; self.walls_left={1:10, 2:10}
-        self.placed_walls=set(); self.current_player=1; self.winner=None; self._move_history=[]
+    def __init__(self, num_players=2):
+        self.board_size = BOARD_SIZE
+        self.num_players = num_players
+        if self.num_players == 2:
+            self.pawn_positions = {1: (0, 4), 2: (8, 4)}
+            self.walls_left = {1: 10, 2: 10}
+            self.goal_conditions = {
+                1: lambda r, c: r == self.board_size - 1,
+                2: lambda r, c: r == 0
+            }
+        elif self.num_players == 4:
+            self.pawn_positions = {1: (0, 4), 2: (8, 4), 3: (4, 0), 4: (4, 8)}
+            self.walls_left = {1: 5, 2: 5, 3: 5, 4: 5}
+            self.goal_conditions = {
+                1: lambda r, c: r == self.board_size - 1,
+                2: lambda r, c: r == 0,
+                3: lambda r, c: c == self.board_size - 1,
+                4: lambda r, c: c == 0
+            }
+        else:
+            raise ValueError("Number of players must be 2 or 4")
+        self.placed_walls = set()
+        self.current_player = 1
+        self.winner = None
+        self._move_history = []
 
     # --- Coordinate Helpers ---
     def _coord_to_pos(self, coord_str):
@@ -38,14 +59,34 @@ class QuoridorGame:
         return f"{chr(ord('A')+c)}{r+1}"
 
     # --- Getters ---
-    def get_state_dict(self): return {"board_size":self.board_size,"p1_pos":self._pos_to_coord(self.pawn_positions.get(1)),"p2_pos":self._pos_to_coord(self.pawn_positions.get(2)),"p1_walls":self.walls_left[1],"p2_walls":self.walls_left[2],"placed_walls":sorted(list(self.get_placed_wall_strings())),"current_player":self.current_player,"winner":self.winner,"is_game_over":self.is_game_over()}
+    def get_state_dict(self):
+        state = {
+            "board_size": self.board_size,
+            "num_players": self.num_players,
+            "pawn_positions": {p: self._pos_to_coord(pos) for p, pos in self.pawn_positions.items()},
+            "walls_left": self.walls_left,
+            "placed_walls": sorted(list(self.get_placed_wall_strings())),
+            "current_player": self.current_player,
+            "winner": self.winner,
+            "is_game_over": self.is_game_over()
+        }
+        # For backward compatibility with 2-player UI
+        if self.num_players == 2:
+            state["p1_pos"] = self._pos_to_coord(self.pawn_positions.get(1))
+            state["p2_pos"] = self._pos_to_coord(self.pawn_positions.get(2))
+            state["p1_walls"] = self.walls_left.get(1)
+            state["p2_walls"] = self.walls_left.get(2)
+        return state
+
     def get_pawn_position(self, p): return self.pawn_positions.get(p)
     def get_pawn_coord(self, p): return self._pos_to_coord(self.get_pawn_position(p))
     def get_walls_left(self, p): return self.walls_left.get(p, 0)
     def get_placed_walls(self): return self.placed_walls.copy()
     def get_placed_wall_strings(self): ws=set(); [ws.add(f"WALL {o} {self._pos_to_coord((r, c))}") for o,r,c in self.placed_walls if self._pos_to_coord((r,c))]; return ws
     def get_current_player(self): return self.current_player
-    def get_opponent(self, p): return 2 if p == 1 else 1
+    def _get_next_player(self, player_id=None):
+        if player_id is None: player_id = self.current_player
+        return (player_id % self.num_players) + 1
     def get_winner(self): return self.winner
     def is_game_over(self): return self.winner is not None
 
@@ -65,36 +106,34 @@ class QuoridorGame:
     # --- Pathfinding & Blocking Checks (Readable + BFS Fix) ---
     def _bfs_find_path(self, player_id): # Boolean check
         start_pos = self.pawn_positions.get(player_id)
-        if not start_pos: return False # No start pos, no path
-        goal_row = self.board_size - 1 if player_id == 1 else 0
-        # --- FIX: Initialize q and visited before loop ---
+        if not start_pos: return False
+        goal_func = self.goal_conditions[player_id]
         queue = collections.deque([start_pos])
         visited = {start_pos}
-        # --- End FIX ---
-        while queue: # Now 'queue' is guaranteed to exist
+        while queue:
             cr, cc = queue.popleft()
-            if cr == goal_row: return True
+            if goal_func(cr, cc): return True
             for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
                 nr, nc = cr + dr, cc + dc; next_pos = (nr, nc)
                 if (self._is_on_board(next_pos) and next_pos not in visited and not self._is_move_blocked_by_wall(cr, cc, nr, nc)):
                     visited.add(next_pos); queue.append(next_pos)
-        return False # Queue emptied, goal not reached
+        return False
 
     def _check_if_path_blocked(self, potential_wall): # Uses boolean BFS
-        self.placed_walls.add(potential_wall); path1 = self._bfs_find_path(1); path2 = self._bfs_find_path(2)
-        self.placed_walls.remove(potential_wall); return not (path1 and path2)
+        self.placed_walls.add(potential_wall)
+        all_paths_exist = all(self._bfs_find_path(p) for p in range(1, self.num_players + 1))
+        self.placed_walls.remove(potential_wall)
+        return not all_paths_exist
 
     def bfs_shortest_path_length(self, player_id): # Returns length or inf
         start_pos = self.pawn_positions.get(player_id)
         if not start_pos: return float('inf')
-        goal_row = self.board_size - 1 if player_id == 1 else 0
-        # --- FIX: Initialize q and visited before loop ---
+        goal_func = self.goal_conditions[player_id]
         queue = collections.deque([(start_pos, 0)])
         visited = {start_pos}
-        # --- End FIX ---
-        while queue: # Now 'queue' is guaranteed to exist
+        while queue:
             (cr, cc), distance = queue.popleft()
-            if cr == goal_row: return distance
+            if goal_func(cr, cc): return distance
             for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
                 nr, nc = cr + dr, cc + dc; next_pos = (nr, nc)
                 if (self._is_on_board(next_pos) and next_pos not in visited and not self._is_move_blocked_by_wall(cr, cc, nr, nc)):
@@ -103,23 +142,44 @@ class QuoridorGame:
 
     # --- Pawn Move Validation (Readable) ---
     def get_valid_pawn_moves(self, player_id):
-        valid_moves=set(); sp=self.pawn_positions.get(player_id); opp_id=self.get_opponent(player_id); op=self.pawn_positions.get(opp_id)
-        if self.is_game_over() or not sp or not op: return valid_moves
-        r1,c1=sp; opp_r,opp_c=op;
-        for dr,dc in [(0,1),(0,-1),(1,0),(-1,0)]: # Orthogonal
-            tr,tc=r1+dr,c1+dc; tp=(tr,tc);
-            on_b=self._is_on_board(tp); is_o=(op is not None and tp==op); is_b=self._is_move_blocked_by_wall(r1,c1,tr,tc) if on_b else False;
-            if not on_b or is_o or is_b: continue
-            valid_moves.add(tp)
-        is_adj=abs(r1-opp_r)+abs(c1-opp_c)==1
-        if is_adj: # Jumps
-            dr_o,dc_o=opp_r-r1,opp_c-c1; sj_p=(opp_r+dr_o,opp_c+dc_o); sj_c=False
-            if self._is_on_board(sj_p) and not self._is_move_blocked_by_wall(opp_r,opp_c,sj_p[0],sj_p[1]): valid_moves.add(sj_p); sj_c=True
-            if not sj_c:
-                 side=[(0,1),(0,-1)] if dc_o==0 else [(1,0),(-1,0)];
-                 for dr_d,dc_d in side:
-                     dt_p=(opp_r+dr_d,opp_c+dc_d);
-                     if self._is_on_board(dt_p) and dt_p!=sp and not self._is_move_blocked_by_wall(opp_r,opp_c,dt_p[0],dt_p[1]): valid_moves.add(dt_p)
+        valid_moves = set()
+        start_pos = self.pawn_positions.get(player_id)
+        if self.is_game_over() or not start_pos:
+            return valid_moves
+        r1, c1 = start_pos
+        other_pawn_positions = {p: pos for p, pos in self.pawn_positions.items() if p != player_id}
+
+        # Basic orthogonal moves
+        for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            tr, tc = r1 + dr, c1 + dc
+            target_pos = (tr, tc)
+            if self._is_on_board(target_pos) and \
+               target_pos not in other_pawn_positions.values() and \
+               not self._is_move_blocked_by_wall(r1, c1, tr, tc):
+                valid_moves.add(target_pos)
+
+        # Jumps over opponents
+        for opp_id, opp_pos in other_pawn_positions.items():
+            if abs(r1 - opp_pos[0]) + abs(c1 - opp_pos[1]) == 1: # is adjacent
+                # Check for wall between player and opponent
+                if self._is_move_blocked_by_wall(r1, c1, opp_pos[0], opp_pos[1]):
+                    continue
+
+                dr_opp, dc_opp = opp_pos[0] - r1, opp_pos[1] - c1
+                jump_pos = (opp_pos[0] + dr_opp, opp_pos[1] + dc_opp)
+
+                if self._is_on_board(jump_pos) and not self._is_move_blocked_by_wall(opp_pos[0], opp_pos[1], jump_pos[0], jump_pos[1]):
+                    if jump_pos not in self.pawn_positions.values():
+                        valid_moves.add(jump_pos)
+                    else: # The space behind opponent is occupied, check for diagonal jumps
+                        # Horizontal jump blocked
+                        if dr_opp == 0:
+                            if self._is_on_board((opp_pos[0] + 1, opp_pos[1])) and not self._is_move_blocked_by_wall(opp_pos[0], opp_pos[1], opp_pos[0]+1, opp_pos[1]) and (opp_pos[0]+1, opp_pos[1]) not in self.pawn_positions.values(): valid_moves.add((opp_pos[0]+1, opp_pos[1]))
+                            if self._is_on_board((opp_pos[0] - 1, opp_pos[1])) and not self._is_move_blocked_by_wall(opp_pos[0], opp_pos[1], opp_pos[0]-1, opp_pos[1]) and (opp_pos[0]-1, opp_pos[1]) not in self.pawn_positions.values(): valid_moves.add((opp_pos[0]-1, opp_pos[1]))
+                        # Vertical jump blocked
+                        elif dc_opp == 0:
+                            if self._is_on_board((opp_pos[0], opp_pos[1] + 1)) and not self._is_move_blocked_by_wall(opp_pos[0], opp_pos[1], opp_pos[0], opp_pos[1]+1) and (opp_pos[0], opp_pos[1]+1) not in self.pawn_positions.values(): valid_moves.add((opp_pos[0], opp_pos[1]+1))
+                            if self._is_on_board((opp_pos[0], opp_pos[1] - 1)) and not self._is_move_blocked_by_wall(opp_pos[0], opp_pos[1], opp_pos[0], opp_pos[1]-1) and (opp_pos[0], opp_pos[1]-1) not in self.pawn_positions.values(): valid_moves.add((opp_pos[0], opp_pos[1]-1))
         return valid_moves
 
     def is_valid_pawn_move(self, player_id, target_pos):
@@ -154,10 +214,11 @@ class QuoridorGame:
         return sorted(vw)
 
     def _check_win_condition(self):
-        if self.current_player not in self.pawn_positions: return
-        pr,_=self.pawn_positions[self.current_player];
-        if self.current_player==1 and pr==self.board_size-1: self.winner=1;
-        elif self.current_player==2 and pr==0: self.winner=2;
+        player = self.current_player
+        if player not in self.pawn_positions: return
+        r, c = self.pawn_positions[player]
+        if self.goal_conditions[player](r, c):
+            self.winner = player
 
     # --- Making Moves (Refined Reason Logic - Readable) ---
     def make_move(self, move_string):
@@ -173,14 +234,16 @@ class QuoridorGame:
 
                 is_valid = self.is_valid_pawn_move(self.current_player, target_pos)
                 if not is_valid:
-                    start_pos=self.pawn_positions.get(self.current_player); opp_id=self.get_opponent(self.current_player); opponent_pos=self.pawn_positions.get(opp_id)
                     reason = R_PAWN_NOTADJ
-                    if opponent_pos and target_pos == opponent_pos: reason = R_PAWN_OCCUPIED
-                    elif start_pos and abs(start_pos[0]-target_pos[0])+abs(start_pos[1]-target_pos[1])==1 and self._is_move_blocked_by_wall(start_pos[0],start_pos[1],target_pos[0],target_pos[1]): reason = R_PAWN_WALLBLOCK
+                    if target_pos in self.pawn_positions.values(): reason = R_PAWN_OCCUPIED
+                    else:
+                        start_pos = self.pawn_positions.get(self.current_player)
+                        if start_pos and abs(start_pos[0]-target_pos[0])+abs(start_pos[1]-target_pos[1])==1 and self._is_move_blocked_by_wall(start_pos[0],start_pos[1],target_pos[0],target_pos[1]):
+                            reason = R_PAWN_WALLBLOCK
                     return False, reason
 
                 self.pawn_positions[self.current_player] = target_pos; self._move_history.append(move_string); self._check_win_condition()
-                if not self.is_game_over(): self.current_player = self.get_opponent(self.current_player)
+                if not self.is_game_over(): self.current_player = self._get_next_player()
                 return True, R_OK
 
             elif move_type == "WALL" and len(parts) == 3:
@@ -191,32 +254,57 @@ class QuoridorGame:
                 r, c = wall_pos; is_valid, reason = self.check_wall_placement_validity(self.current_player, orientation, r, c)
                 if not is_valid: return False, reason
                 self.placed_walls.add((orientation, r, c)); self.walls_left[self.current_player] -= 1
-                self._move_history.append(move_string); self.current_player = self.get_opponent(self.current_player)
+                self._move_history.append(move_string); self.current_player = self._get_next_player()
                 return True, R_OK
             else: return False, R_INV_FORMAT
         except Exception as e: print(f"!! Error processing move '{move_string}': {e}"); import traceback; traceback.print_exc(); return False, f"InternalError: {e}"
 
 # --- Self-Tests (Readable) ---
 if __name__ == "__main__":
-    print("--- Basic Move Tests ---")
-    game = QuoridorGame(); print("Initial state created.")
-    result, reason = game.make_move("MOVE E2"); print(f"MOVE E2: Success={result}, Reason={reason}")
-    result, reason = game.make_move("MOVE E9"); print(f"MOVE E9 (P2): Success={result}, Reason={reason}")
-    result, reason = game.make_move("MOVE E8"); print(f"MOVE E8 (P2): Success={result}, Reason={reason}")
-    print(f"P1 valid moves from E2: {[game._pos_to_coord(p) for p in sorted(list(game.get_valid_pawn_moves(1)))]}")
+    print("--- 4-Player Game Tests ---")
+    game = QuoridorGame(num_players=4)
+    print("Initial 4-player state created.")
+    print(f"Pawn positions: {game.pawn_positions}")
+    print(f"Walls left: {game.walls_left}")
+    print(f"Current player: {game.current_player}")
 
-    print("\n--- Testing bfs_shortest_path_length ---")
-    game_path=QuoridorGame(); p1_len=game_path.bfs_shortest_path_length(1); p2_len=game_path.bfs_shortest_path_length(2); print(f"Initial state: P1 path={p1_len}, P2 path={p2_len}")
-    game_path.make_move("MOVE E2"); game_path.make_move("MOVE E8")
-    p1_len=game_path.bfs_shortest_path_length(1); p2_len=game_path.bfs_shortest_path_length(2); print(f"After E2, E8: P1 path={p1_len}, P2 path={p2_len}")
-    game_path.placed_walls.add(('H', 1, 4)); game_path.walls_left[1] -= 1; game_path.current_player = 2
-    p1_len=game_path.bfs_shortest_path_length(1); p2_len=game_path.bfs_shortest_path_length(2); print(f"After P1 WALL H E2: P1 path={p1_len}, P2 path={p2_len}")
+    print("\n--- Testing bfs_shortest_path_length for 4 players ---")
+    for i in range(1, 5):
+        path_len = game.bfs_shortest_path_length(i)
+        print(f"Initial state: P{i} path={path_len}")
 
-    print("\n--- Testing get_valid_wall_placements ---")
-    game_walls=QuoridorGame(); game_walls.make_move("MOVE E2"); game_walls.make_move("MOVE E8")
-    game_walls.placed_walls.add(('H', 4, 4)); game_walls.current_player = 1
-    print(f"State: P1@E2, P2@E8, Wall H E5. Turn: {game_walls.current_player}"); print(f"P1 Walls Left: {game_walls.get_walls_left(1)}")
-    valid_walls_p1 = game_walls.get_valid_wall_placements(1); print(f"P1 Valid Walls ({len(valid_walls_p1)}): {valid_walls_p1[:10]}...")
-    print(f"Is WALL H D5 valid? {'WALL H D5' in valid_walls_p1}"); print(f"Is WALL V E5 valid? {'WALL V E5' in valid_walls_p1}"); print(f"Is WALL H E4 valid? {'WALL H E4' in valid_walls_p1}")
-    result, reason = game_walls.make_move("WALL H E9"); print(f"P1 attempts WALL H E9: Success={result}, Reason={reason}")
-    result, reason = game_walls.make_move("WALL H D5"); print(f"P1 attempts WALL H D5: Success={result}, Reason={reason}")
+    print("\n--- Basic Move Tests (4 players) ---")
+    result, reason = game.make_move("MOVE E2"); print(f"P1 MOVE E2: Success={result}, Reason={reason}, Next Player: {game.current_player}")
+    result, reason = game.make_move("MOVE E8"); print(f"P2 MOVE E8: Success={result}, Reason={reason}, Next Player: {game.current_player}")
+    result, reason = game.make_move("MOVE B5"); print(f"P3 MOVE B5: Success={result}, Reason={reason}, Next Player: {game.current_player}")
+    result, reason = game.make_move("MOVE H5"); print(f"P4 MOVE H5: Success={result}, Reason={reason}, Next Player: {game.current_player}")
+
+    print(f"\nP1 valid moves from E2: {[game._pos_to_coord(p) for p in sorted(list(game.get_valid_pawn_moves(1)))]}")
+
+    print("\n--- Testing Wall Placement ---")
+    # It's P1's turn again
+    result, reason = game.make_move("WALL H E2")
+    print(f"P1 attempts WALL H E2: Success={result}, Reason={reason}, Next Player: {game.current_player}")
+    print(f"P1 Walls Left: {game.get_walls_left(1)}")
+
+    print("\n--- Testing Path Blocking ---")
+    game_for_block_test = QuoridorGame(num_players=4)
+    # This wall would block P1 if other walls were present
+    game_for_block_test.placed_walls.add(('H', 0, 1)); game_for_block_test.placed_walls.add(('H', 0, 3)); game_for_block_test.placed_walls.add(('H', 0, 5)); game_for_block_test.placed_walls.add(('H', 0, 7))
+    print(f"Blocking P1 path manually")
+    is_blocked = game_for_block_test._check_if_path_blocked(('H', 0, 0))
+    print(f"Is path blocked by wall at A1 for P1? {is_blocked}")
+
+
+    print("\n--- Test a few more turns ---")
+    game = QuoridorGame(num_players=4)
+    game.make_move("MOVE E2") # P1
+    game.make_move("MOVE E8") # P2
+    game.make_move("MOVE B5") # P3
+    game.make_move("MOVE H5") # P4
+    game.make_move("MOVE E3") # P1
+    game.make_move("MOVE E7") # P2
+    game.make_move("MOVE C5") # P3
+    game.make_move("MOVE G5") # P4
+    print("Game state after a few turns:")
+    print(game.get_state_dict())

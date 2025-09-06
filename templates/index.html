@@ -20,10 +20,8 @@
         <header class="game-header">
             <h1>Quoridor Arena</h1>
             <p class="subtitle">A strategic board game of walls and wits. Outsmart the bot to win!</p>
-            <div class="player-labels">
-                <span class="player-label p1-label"><i class="material-icons">smart_toy</i> P1: Bot</span>
-                <span>vs</span>
-                <span class="player-label p2-label"><i class="material-icons">person</i> P2: You</span>
+            <div id="player-labels-container" class="player-labels">
+                <!-- Player labels will be dynamically generated here -->
             </div>
         </header>
 
@@ -60,13 +58,8 @@
 
                 <div class="info-card player-stats">
                      <h2><i class="material-icons">inventory_2</i> Resources</h2>
-                     <div class="player-resource">
-                         <span><i class="material-icons">smart_toy</i> P1 (Bot) Walls:</span>
-                         <span id="p1-walls-info">10</span>
-                     </div>
-                     <div class="player-resource">
-                         <span><i class="material-icons">person</i> P2 (You) Walls:</span>
-                         <span id="p2-walls-info">10</span>
+                     <div id="player-resources-container">
+                         <!-- Player resources will be dynamically generated here -->
                      </div>
                 </div>
 

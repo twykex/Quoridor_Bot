@@ -22,8 +22,14 @@
     --board-bg: #1f1f3a;
     --grid-color: #3a3a5a;
     --goal-color: rgba(233, 69, 96, 0.2);
-    --p1-color: #e94560; /* Player 1 (Bot) - Accent color */
-    --p2-color: #ff7f50; /* Player 2 (You) - Secondary accent */
+    --p1-color: #e94560;
+    --p1-highlight: #ff7a8f;
+    --p2-color: #ff7f50;
+    --p2-highlight: #ffae91;
+    --p3-color: #20B2AA;
+    --p3-highlight: #63d8d2;
+    --p4-color: #9370DB;
+    --p4-highlight: #c0b0ef;
     --wall-color: var(--gold-color);
     --valid-move-fill: rgba(233, 69, 96, 0.2);
     --valid-move-stroke: var(--accent-primary);
@@ -112,6 +118,8 @@ body {
 
 .p1-label { color: var(--p1-color); }
 .p2-label { color: var(--p2-color); }
+.p3-label { color: var(--p3-color); }
+.p4-label { color: var(--p4-color); }
 
 .game-main {
     display: grid;
@@ -346,7 +354,12 @@ body {
 }
 .goal-cell {
     fill: var(--goal-color);
+    transition: fill 0.3s ease;
 }
+.goal-p1 { fill: rgba(233, 69, 96, 0.2); }
+.goal-p2 { fill: rgba(255, 127, 80, 0.2); }
+.goal-p3 { fill: rgba(32, 178, 170, 0.2); }
+.goal-p4 { fill: rgba(147, 112, 219, 0.2); }
 
 /* Pawns */
 .pawn {
@@ -354,8 +367,10 @@ body {
     transition: all 0.3s ease;
     filter: drop-shadow(3px 4px 5px rgba(0, 0, 0, 0.5));
 }
-.pawn-p1 { fill: var(--p1-color); stroke: #fff; }
-.pawn-p2 { fill: var(--p2-color); stroke: #fff; }
+.pawn-p1 { fill: url(#p1Gradient); stroke: #fff; }
+.pawn-p2 { fill: url(#p2Gradient); stroke: #fff; }
+.pawn-p3 { fill: url(#p3Gradient); stroke: #fff; }
+.pawn-p4 { fill: url(#p4Gradient); stroke: #fff; }
 .pawn-active {
     stroke-width: 4;
     stroke: var(--gold-color);

@@ -1,4 +1,6 @@
-Initialized AlgoBot for P1 | Depth=3
+Initialized AlgoBot for P2 | Depth=3 | Players=4
+Initialized AlgoBot for P3 | Depth=3 | Players=4
+Initialized AlgoBot for P4 | Depth=3 | Players=4
 Starting Flask server Quoridor(Human vs AlgoBot)...
  * Serving Flask app 'app'
  * Debug mode: off
