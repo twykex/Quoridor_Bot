@@ -30,6 +30,8 @@ const confirmMoveButton = document.getElementById('confirm-move-button');
 const cancelMoveButton = document.getElementById('cancel-move-button');
 const howToPlayToggle = document.querySelector('.how-to-play h2');
 const howToPlayContent = document.querySelector('.how-to-play .rules-content');
+const p1Label = document.querySelector('.p1-label');
+const p2Label = document.querySelector('.p2-label');
 
 // --- SVG/Drawing Configuration ---
 let CELL_SIZE = 55;
@@ -400,6 +402,20 @@ function updateInfoBar(gameState) {
     if (statusMessageSpan) {
         statusMessageSpan.textContent = statusMsg.length > maxLen ? statusMsg.substring(0, maxLen - 3) + "..." : statusMsg;
     }
+
+    // Highlight active player label
+    if (p1Label && p2Label) {
+        if (gameState.current_player === 1) {
+            p1Label.classList.add('active-player');
+            p2Label.classList.remove('active-player');
+        } else if (gameState.current_player === 2) {
+            p1Label.classList.remove('active-player');
+            p2Label.classList.add('active-player');
+        } else {
+            p1Label.classList.remove('active-player');
+            p2Label.classList.remove('active-player');
+        }
+    }
 }
 
 function disableInteraction() {
@@ -596,10 +612,9 @@ svgBoard.addEventListener('click', handleBoardClick); // Listener on the main SV
 confirmMoveButton.addEventListener('click', confirmMove);
 cancelMoveButton.addEventListener('click', cancelMove);
 howToPlayToggle.addEventListener('click', () => {
-    if (howToPlayContent.style.display === 'block') {
-        howToPlayContent.style.display = 'none';
-    } else {
-        howToPlayContent.style.display = 'block';
+    const howToPlayCard = document.querySelector('.how-to-play');
+    if (howToPlayCard) {
+        howToPlayCard.classList.toggle('is-collapsed');
     }
 });
 
